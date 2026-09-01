@@ -1,0 +1,29 @@
+{
+  "name": "OP Trainer v1.7",
+  "short_name": "OP Trainer",
+  "id": "op-trainer-v1-7",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f7fb",
+  "theme_color": "#111827",
+  "description": "Prywatny trener do Olimpiady Przedsiębiorczości: oficjalne archiwum, tryby egzaminacyjne i filtr tematyczny XXII edycji.",
+  "categories": [
+    "education"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
