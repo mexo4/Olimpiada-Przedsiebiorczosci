@@ -1,14 +1,14 @@
 {
-  "name": "OP Trainer v1.7",
+  "name": "OP Trainer v1.9",
   "short_name": "OP Trainer",
-  "id": "op-trainer-v1-7",
+  "id": "op-trainer-v1-8-1",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f4f7fb",
   "theme_color": "#111827",
-  "description": "Prywatny trener do Olimpiady Przedsiębiorczości: oficjalne archiwum, tryby egzaminacyjne i filtr tematyczny XXII edycji.",
+  "description": "Prywatny trener do Olimpiady Przedsiębiorczości: pełne archiwum PDF/HTML, lata i edycje, tryby etapowe i XXII.",
   "categories": [
     "education"
   ],

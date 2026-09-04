@@ -1,4 +1,4 @@
-﻿OP Trainer v1.7 - publiczna powloka PWA na iPhone
+﻿OP Trainer v1.8 - publiczna powloka PWA na iPhone
 
 Ten folder NIE zawiera oficjalnej bazy pytan OP.
 Wrzuc ZAWARTOSC folderu iphone-site do repozytorium GitHub Pages.
