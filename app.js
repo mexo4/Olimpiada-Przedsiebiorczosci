@@ -109,7 +109,7 @@ async function tryLoadOfficialData(force=false,onProgress=null){
     state.keyPdfCount=keyIndex.length;
     if(!raw.length&&!keyIndex.length){state.officialLoadError='Nie znaleziono ani op-raw.json, ani archiwalnych arkuszy OP.';return 0;}
     if(onProgress)onProgress({done:0,total:keyIndex.length,label:`Wczytano ${raw.length} pytań interaktywnych i ${keyIndex.length} materiałów archiwalnych. Scalanie pełnej bazy...`});
-    const fingerprint=`v192|${raw.length}|${keyIndex.length}`;
+    const fingerprint=`v193|${raw.length}|${keyIndex.length}`;
     const prev=await getMeta('officialFingerprint','');
     const currentOfficial=state.questions.filter(q=>String(q.id||'').startsWith('op-')).length;
     if(!force&&prev===fingerprint&&currentOfficial>0)return currentOfficial;
@@ -162,8 +162,9 @@ async function syncOfficialDataInBackground(force=false){
 }
 
 function nav(active){return `<nav class="nav"><button data-nav="home" class="${active==='home'?'active':''}">Start</button><button data-nav="learn" class="${active==='learn'?'active':''}">Nauka</button><button data-nav="xxii" class="${active==='xxii'?'active':''}">XXII</button><button data-nav="stats" class="${active==='stats'?'active':''}">Statystyki</button><button data-nav="settings" class="${active==='settings'?'active':''}">Dane</button></nav>`}
-function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.9.2</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
+function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.9.3</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
 function render(){
+  document.body.classList.toggle('quiz-active',state.view==='session');
   if(state.view==='home')renderHome();else if(state.view==='learn')renderLearnSetup();else if(state.view==='xxii')renderXXII();else if(state.view==='stats')renderStats();else if(state.view==='settings')renderSettings();else if(state.view==='stage')renderStageMode();else if(state.view==='session')renderSession();else if(state.view==='summary')renderSummary();
   document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{stopExamTimer();state.view=b.dataset.nav;state.session=null;render()});
 }
@@ -181,7 +182,7 @@ ${tile('Losowy trening','Filtry: etap, edycja i kategoria.','learn')}
 ${tile('Tryb szkolny','Tylko archiwalne pytania z eliminacji szkolnych.','stage:school')}
 ${tile('Tryb okręgowy','Tylko archiwalne pytania z eliminacji okręgowych.','stage:district')}
 ${tile('Tryb centralny','Tylko archiwalne pytania z eliminacji centralnych.','stage:central')}
-${tile('Tryb połowy OP','20 pytań: 10 × 1 pkt + 10 × 2 pkt. Maks. 30 pkt.','half')}
+${tile('Tryb 20 pytań','20 pytań: 10 łatwych + 10 trudnych. Punkty i poprawność dopiero na końcu. Maks. 30 pkt.','half')}
 ${tile('Pełna symulacja OP','50 pytań: 25 łatwiejszych + 25 trudniejszych. Maks. 75 pkt. Wynik ukryty do końca.','official')}
 ${tile('Powtórz błędy',`${wrongIds.size} pytań wymagających poprawy.`,'mistakes')}
 ${tile('Powtórki dziś',`${due} pytań zaplanowanych.`,'due')}
@@ -239,7 +240,7 @@ function stageAction(a){
  if(a==='stage-half'){
    if(p.easy.length<10||p.hard.length<10){alert(`Do połowy potrzeba 10 pytań łatwiejszych i 10 trudniejszych. Dla tego wyboru masz ${p.easy.length} łatwiejszych i ${p.hard.length} trudniejszych.`);return}
    const list=[...shuffle(p.easy).slice(0,10),...shuffle(p.hard).slice(0,10)];
-   startSession(shuffle(list),`stage-${state.stageMode}-half`,true,30,true);return
+   startSession(shuffle(list),`stage-${state.stageMode}-half`,false,30,true);return
  }
  if(a==='stage-full'){
    if(p.easy.length<25||p.hard.length<25){alert(`Do pełnego testu potrzeba 25 pytań łatwiejszych i 25 trudniejszych. Dla tego wyboru masz ${p.easy.length} łatwiejszych i ${p.hard.length} trudniejszych.`);return}
@@ -275,7 +276,7 @@ function xxiiAction(a){
    const p=splitByDifficulty(state.xxiiQuestions),easyN=Math.min(10,p.easy.length),hardN=Math.min(10,p.hard.length);
    const list=[...shuffle(p.easy).slice(0,easyN),...shuffle(p.hard).slice(0,hardN)];
    if(!list.length){alert('Brak pytań z rozpoznaną punktacją 1/2 pkt.');return}
-   startSession(shuffle(list),'xxii-half',true,30,true);return
+   startSession(shuffle(list),'xxii-half',false,30,true);return
  }
  if(a==='xxii-all'){startSession(shuffle(state.xxiiQuestions),'xxii-all',false);return}
 }
@@ -290,7 +291,11 @@ function startOfficialMode(easyN,hardN,mode){
    if(!official.length){alert('Aplikacja ma teraz tylko pytania demo. W folderze tej wersji nie ma załadowanej bazy OP. Uruchom PRZENIES-DANE-Z-POPRZEDNIEJ-WERSJI.bat albo POBIERZ-PYTANIA-WINDOWS.bat, a potem START-WINDOWS.bat.');return}
    alert(`Do tego trybu potrzeba co najmniej ${easyN} pytań łatwiejszych i ${hardN} trudniejszych z oficjalnej bazy. Gotowych masz obecnie ${parts.easy.length} łatwiejszych i ${parts.hard.length} trudniejszych. Wejdź w Dane i sprawdź wynik analizy kluczy PDF.`);return
  }
- const list=[...shuffle(parts.easy).slice(0,easyN),...shuffle(parts.hard).slice(0,hardN)];startSession(shuffle(list),mode,true,mode==='half'?30:60,true);
+ const list=[...shuffle(parts.easy).slice(0,easyN),...shuffle(parts.hard).slice(0,hardN)];
+ // 20-question half-OP mode hides points until the end, but shows correctness and explanation immediately after each answer.
+ // The full score breakdown is shown only after all questions are completed.
+ const isHalf=mode==='half';
+ startSession(shuffle(list),mode,isHalf,isHalf?30:60,true);
 }
 
 function startExamSetup(){const base=primaryQuestions(),ed=uniq(base.map(q=>q.edition)).sort(),st=uniq(base.map(q=>q.stage)).sort();$('#app').innerHTML=shell(`<div class="card stack"><h2 style="margin:0">Własna symulacja</h2><div class="filters">${selectField('Edycja','x-edition',['Wszystkie',...ed])}${selectField('Etap','x-stage',['Wszystkie',...st])}<div class="field"><label>Liczba pytań</label><input id="x-count" type="number" min="1" max="200" value="50"></div></div><div class="field"><label>Czas (minuty)</label><input id="x-time" type="number" min="1" max="240" value="60"></div><button class="btn danger" id="x-start">Rozpocznij egzamin</button></div>`,'home');$('#x-start').onclick=()=>{const e=$('#x-edition').value,s=$('#x-stage').value;let p=primaryQuestions().filter(q=>(e==='Wszystkie'||q.edition===e)&&(s==='Wszystkie'||q.stage===s));const n=Math.min(parseInt($('#x-count').value||50),p.length),mins=parseInt($('#x-time').value||60);startSession(shuffle(p).slice(0,n),'exam',true,mins,false)}}
@@ -298,34 +303,103 @@ function startExamSetup(){const base=primaryQuestions(),ed=uniq(base.map(q=>q.ed
 function startAdaptive(n){const base=primaryQuestions(),scored=base.map(q=>({q,w:adaptiveWeight(q)})).sort((a,b)=>b.w-a.w),head=scored.slice(0,Math.max(n*3,n)),pool=[];head.forEach(x=>{const copies=Math.max(1,Math.min(8,Math.round(x.w)));for(let i=0;i<copies;i++)pool.push(x.q)});const selected=[];for(const q of shuffle(pool)){if(!selected.some(x=>x.id===q.id))selected.push(q);if(selected.length>=Math.min(n,base.length))break}startSession(selected,'adaptive',false);}
 function adaptiveWeight(q){let w=1;const h=state.history.filter(x=>x.questionId===q.id);if(!h.length)w+=2;w+=h.filter(x=>!x.correct).length*1.5;if(getSR(q.id).due<=Date.now())w+=3;const cat=categoryAccuracy(q.category);if(cat.total>=3)w+=(100-cat.pct)/25;return w;}
 
-function startSession(list,mode,exam=false,minutes=60,officialScoring=false){if(!list.length){alert('Brak pytań dla tego trybu.');return}stopExamTimer();state.session={mode,questions:list,index:0,answers:{},revealed:false,started:Date.now(),exam,endAt:exam?Date.now()+minutes*60000:null,officialScoring};state.view='session';if(exam)startExamTimer();render();}
+const DISPLAY_KEYS=['A','B','C','D'];
+function buildAnswerOrders(list){const out={};for(const q of list)out[q.id]=shuffle([...DISPLAY_KEYS]);return out;}
+function answerOrderFor(s,q){return s.answerOrders?.[q.id]||DISPLAY_KEYS;}
+function originalKeyForDisplay(s,q,displayKey){if(displayKey==='E')return'E';const idx=DISPLAY_KEYS.indexOf(displayKey);return answerOrderFor(s,q)[idx]||displayKey;}
+function displayKeyForOriginal(s,q,originalKey){if(originalKey==='E')return'E';const idx=answerOrderFor(s,q).indexOf(originalKey);return idx>=0?DISPLAY_KEYS[idx]:originalKey;}
+function displayedAnswerText(s,q,displayKey){const original=originalKeyForDisplay(s,q,displayKey);return q.answers?.[original]??'';}
+function isConfirmed(s,q){return !!s.confirmed?.[q.id];}
+
+function startSession(list,mode,exam=false,minutes=60,officialScoring=false){
+ if(!list.length){alert('Brak pytań dla tego trybu.');return}
+ stopExamTimer();
+ state.session={mode,questions:list,index:0,answers:{},confirmed:{},recorded:{},answerOrders:buildAnswerOrders(list),started:Date.now(),exam,endAt:exam?Date.now()+minutes*60000:null,officialScoring};
+ state.view='session';if(exam)startExamTimer();render();
+}
 function startExamTimer(){stopExamTimer();state.examTimer=setInterval(()=>{if(!state.session)return;const left=state.session.endAt-Date.now();if(left<=0){finishSession();return}const el=$('#timer');if(el)el.textContent=formatTime(left)},1000)}
 function stopExamTimer(){if(state.examTimer){clearInterval(state.examTimer);state.examTimer=null}}
 const formatTime=ms=>{const s=Math.max(0,Math.floor(ms/1000));return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 
+function scoredAnswer(s,q){if(s.exam)return s.answers[q.id];return isConfirmed(s,q)?s.answers[q.id]:undefined;}
 function scoreBreakdown(s){
  const easy=s.questions.filter(q=>normalizedDifficulty(q)==='easy');
  const hard=s.questions.filter(q=>normalizedDifficulty(q)==='hard');
- const easyPts=easy.reduce((t,q)=>t+officialPoints(q,s.answers[q.id]),0);
- const hardPts=hard.reduce((t,q)=>t+officialPoints(q,s.answers[q.id]),0);
+ const easyPts=easy.reduce((t,q)=>t+officialPoints(q,scoredAnswer(s,q)),0);
+ const hardPts=hard.reduce((t,q)=>t+officialPoints(q,scoredAnswer(s,q)),0);
  return {easy,hard,easyPts,hardPts,total:easyPts+hardPts,max:easy.length+hard.length*2,scoreable:easy.length+hard.length};
 }
 function liveScoreHtml(s){
- if(s.mode==='official')return '';
+ if(s.exam||s.mode==='official')return '';
  const b=scoreBreakdown(s);if(!b.scoreable)return '';
  return `<div class="live-score"><strong>${fmtPts(b.total)} pkt</strong><span>łatwe ${fmtPts(b.easyPts)} • trudne ${fmtPts(b.hardPts)}</span></div>`;
 }
 
-function renderSession(){const s=state.session,q=s.questions[s.index];if(!q){finishSession();return}const chosen=s.answers[q.id],exam=s.exam,reveal=!exam&&s.revealed,diff=normalizedDifficulty(q);$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span>${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span>${esc(q.edition)}</span><span>${esc(q.stage)}</span><span>${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question">${esc(q.question)}</div><div class="stack">${['A','B','C','D'].map(k=>answerButton(q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div>${reveal?`<div class="comment"><strong>${chosen==='E'?'Brak odpowiedzi — 0 pkt':chosen===q.correct?'Poprawnie':'Błędnie'}.</strong> Prawidłowa odpowiedź: <strong>${esc(q.correct)}</strong>.<br>${esc(q.comment||'Brak komentarza.')}</div>`:''}<div class="row"><button class="btn secondary" id="fav">${state.favorites.has(q.id)?'★ Ulubione':'☆ Dodaj do ulubionych'}</button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next">${s.index===s.questions.length-1?'Zakończ':'Dalej →'}</button></div></div></div>`,'learn');document.querySelectorAll('.answer').forEach(b=>b.onclick=()=>chooseAnswer(q,b.dataset.k));$('#fav').onclick=()=>toggleFavorite(q.id);$('#prev').onclick=()=>{s.index--;s.revealed=false;render()};$('#next').onclick=()=>{if(!chosen){alert('Wybierz odpowiedź A-D albo E — nie udzielam odpowiedzi.');return}if(!exam&&!s.revealed){s.revealed=true;render();return}if(s.index===s.questions.length-1)finishSession();else{s.index++;s.revealed=false;render()}};}
-function answerButton(q,k,chosen,reveal){let cls='answer';if(chosen===k)cls+=' selected';if(reveal&&k===q.correct)cls+=' correct';if(reveal&&chosen===k&&k!==q.correct)cls+=' wrong';return `<button class="${cls}" data-k="${k}"><strong>${k}</strong><span>${esc(q.answers[k])}</span></button>`}
-function chooseAnswer(q,k){const s=state.session;if(s.exam){s.answers[q.id]=k;render();return}if(s.revealed)return;s.answers[q.id]=k;s.revealed=true;recordAnswer(q,k,s.mode);render();}
+function explanationHtml(s,q,chosen){
+ const correctDisplay=displayKeyForOriginal(s,q,q.correct);
+ const correctText=q.answers?.[q.correct]||'';
+ const status=chosen==='E'?'Brak odpowiedzi — 0 pkt':chosen===q.correct?'Poprawnie':'Błędnie';
+ return `<div class="comment" id="explanation"><strong>${status}.</strong> Prawidłowa odpowiedź: <strong>${esc(correctDisplay)}</strong> — ${esc(correctText)}.<div class="explanation-text">${esc(q.comment||'Brak komentarza do tego pytania w archiwum.')}</div></div>`;
+}
+
+function renderSession(){
+ const s=state.session,q=s.questions[s.index];if(!q){finishSession();return}
+ const chosen=s.answers[q.id],exam=s.exam,reveal=!exam&&isConfirmed(s,q),diff=normalizedDifficulty(q);
+ const chosenDisplay=chosen?displayKeyForOriginal(s,q,chosen):null;
+ const correctDisplay=displayKeyForOriginal(s,q,q.correct);
+ const nextLabel=(!exam&&!reveal)?(chosen?'Sprawdź odpowiedź':'Wybierz odpowiedź'):(s.index===s.questions.length-1?'Zakończ':'Dalej →');
+ $('#app').innerHTML=shell(`<div class="stack quiz-wrap"><div class="card stack quiz-card"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span>${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span class="meta-edition">${esc(q.edition)}</span><span>${esc(q.stage)}</span><span class="meta-category">${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question">${esc(q.question)}</div>${reveal?explanationHtml(s,q,chosen):''}<div class="stack answers-stack">${DISPLAY_KEYS.map(k=>answerButton(s,q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''} ${reveal&&chosen==='E'?'neutral':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div><div class="row session-actions"><button class="btn secondary fav-btn" id="fav">${state.favorites.has(q.id)?'★':'☆'} <span class="fav-label">${state.favorites.has(q.id)?'Ulubione':'Dodaj do ulubionych'}</span></button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next" ${!exam&&!chosen?'disabled':''}>${nextLabel}</button></div></div></div>`,'learn');
+ document.querySelectorAll('.answer').forEach(b=>b.onclick=()=>chooseAnswer(q,b.dataset.k));
+ $('#fav').onclick=()=>toggleFavorite(q.id);
+ $('#prev').onclick=()=>{s.index--;render()};
+ $('#next').onclick=async()=>{
+   const current=s.answers[q.id];
+   if(!current){alert('Wybierz odpowiedź A-D albo E — nie udzielam odpowiedzi.');return}
+   if(!exam&&!isConfirmed(s,q)){await confirmAnswer(q);return}
+   if(s.index===s.questions.length-1)await finishSession();else{s.index++;render()}
+ };
+}
+function answerButton(s,q,displayKey,chosen,reveal){
+ const original=originalKeyForDisplay(s,q,displayKey);let cls='answer';
+ if(chosen===original)cls+=' selected';
+ if(reveal&&original===q.correct)cls+=' correct';
+ if(reveal&&chosen===original&&original!==q.correct)cls+=' wrong';
+ return `<button class="${cls}" data-k="${displayKey}"><strong>${displayKey}</strong><span>${esc(displayedAnswerText(s,q,displayKey))}</span></button>`;
+}
+async function chooseAnswer(q,displayKey){
+ const s=state.session;if(isConfirmed(s,q))return;
+ const original=originalKeyForDisplay(s,q,displayKey);
+ s.answers[q.id]=original;
+ if(s.exam){
+   // In the 20-question half-OP mode, reveal correctness/explanation immediately, but keep points hidden.
+   if(s.mode==='half' && !s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,original,s.mode)}
+   render();return
+ }
+ // E means intentionally no answer: immediately show the explanation, but keep score at 0.
+ if(original==='E'){await confirmAnswer(q);return}
+ // A-D are only selected here. Score and feedback appear after explicit confirmation.
+ render();
+}
+async function confirmAnswer(q){
+ const s=state.session,k=s.answers[q.id];if(!k||s.exam||isConfirmed(s,q))return;
+ s.confirmed[q.id]=true;
+ if(!s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,k,s.mode)}
+ render();
+}
+
 async function recordAnswer(q,k,mode){const correct=k===q.correct,rec={questionId:q.id,answer:k,correct,ts:Date.now(),category:q.category,edition:q.edition,year:questionYear(q),stage:q.stage,mode};await add(STORE_H,rec);state.history.push(rec);if(k!=='E')updateSR(q.id,correct);}
-async function finishSession(){stopExamTimer();const s=state.session;if(s.exam){for(const q of s.questions){const k=s.answers[q.id];if(k)await recordAnswer(q,k,s.mode)}}s.finished=Date.now();state.view='summary';render();}
+async function finishSession(){
+ stopExamTimer();const s=state.session;
+ if(s.exam){for(const q of s.questions){const k=s.answers[q.id];if(k&&!s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,k,s.mode)}}}
+ s.finished=Date.now();state.view='summary';render();
+}
 function officialPoints(q,a){if(a==='E'||!a)return 0;const hard=normalizedDifficulty(q)==='hard';if(a===q.correct)return hard?2:1;return hard?-1:-0.5;}
-function renderSummary(){const s=state.session,answered=s.questions.filter(q=>s.answers[q.id]&&s.answers[q.id]!=='E'),correct=answered.filter(q=>s.answers[q.id]===q.correct).length,b=scoreBreakdown(s);let scoreBlock='';
+function renderSummary(){
+ const s=state.session,answered=s.questions.filter(q=>s.answers[q.id]&&s.answers[q.id]!=='E'),correct=answered.filter(q=>s.answers[q.id]===q.correct).length,b=scoreBreakdown(s);let scoreBlock='';
  if(b.scoreable){const main=s.officialScoring?`<div class="result">${fmtPts(b.total)} / ${b.max} pkt</div><h2>${pct(Math.max(0,b.total),b.max)}% maksymalnej punktacji</h2>`:`<div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}% poprawnych</h2>`;scoreBlock=`<div class="card official-score">${main}<div class="score-split"><span>Łatwiejsze: <strong>${fmtPts(b.easyPts)} / ${b.easy.length}</strong></span><span>Trudniejsze: <strong>${fmtPts(b.hardPts)} / ${b.hard.length*2}</strong></span><span>Łącznie: <strong>${fmtPts(b.total)} / ${b.max} pkt</strong></span></div><p class="sub">Poprawna: +1/+2 • błędna: −0,5/−1 • E / brak odpowiedzi: 0 pkt</p></div>`;
  }else scoreBlock=`<div class="card"><div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}%</h2><p class="sub">Odpowiedziano: ${answered.length}/${s.questions.length}</p></div>`;
- $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div></div><div style="text-align:right"><strong>${a||'—'} / ${q.correct}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};}
+ $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';const shownA=a?displayKeyForOriginal(s,q,a):'—',shownCorrect=displayKeyForOriginal(s,q,q.correct);return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div></div><div style="text-align:right"><strong>${shownA} / ${shownCorrect}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};
+}
 function fmtPts(n){return Number.isInteger(n)?String(n):n.toFixed(1).replace('.',',')}
 
 function renderStats(){const cats=uniq([...allQuestions().map(q=>q.category),...state.history.map(h=>h.category)]).filter(Boolean),total=state.history.length,correct=state.history.filter(x=>x.correct).length;const years=uniq(allQuestions().map(questionYear).filter(Boolean)).sort().reverse();$('#app').innerHTML=shell(`<div class="stack"><div class="stats-grid"><div class="card"><div class="kpi">${total}</div><div class="kpi-label">odpowiedzi</div></div><div class="card"><div class="kpi">${pct(correct,total)}%</div><div class="kpi-label">poprawnych</div></div><div class="card"><div class="kpi">${getWrongIds().size}</div><div class="kpi-label">pytania z błędem</div></div></div><div class="card stack"><h3 style="margin:0">Roczniki w bazie</h3><div class="year-grid">${years.map(y=>`<span class="year-chip">${esc(y)} • ${allQuestions().filter(q=>questionYear(q)===y).length}</span>`).join('')||'<span class="sub">Brak danych o roku.</span>'}</div></div><div class="card stack"><h3 style="margin:0">Kategorie</h3>${cats.map(c=>{const a=categoryAccuracy(c);return `<div><div class="row" style="justify-content:space-between"><strong>${esc(c)}</strong><span>${a.pct}% (${a.correct}/${a.total})</span></div><div class="bar"><span style="width:${a.pct}%"></span></div></div>`}).join('')}</div><div class="card stack"><h3 style="margin:0">Najsłabsze działy</h3>${weakCategories().map(x=>`<div class="list-item"><span>${esc(x.category)}</span><strong>${x.pct}%</strong></div>`).join('')||'<div class="empty">Za mało danych.</div>'}</div></div>`,'stats');}
@@ -338,7 +412,7 @@ function updateSR(id,correct){const all=JSON.parse(localStorage.getItem('op-sr')
 function countDue(){const now=Date.now();return allQuestions().filter(q=>getSR(q.id).due<=now).length}
 async function toggleFavorite(id){if(state.favorites.has(id))state.favorites.delete(id);else state.favorites.add(id);await setMeta('favorites',[...state.favorites]);render()}
 
-function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.9.2 waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
+function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.9.3 zachowuje naprawiony import PDF z v1.9.2 i dodaje tasowanie odpowiedzi oraz poprawiony tryb mobilny. Import PDF nadal waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
 async function importQuestionsFile(ev){const f=ev.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text()),arr=Array.isArray(data)?data:data.questions;validateQuestions(arr);for(const q of arr)await put(STORE_Q,q);state.questions=await getAll(STORE_Q);refreshXXIIQuestions();alert(`Zaimportowano ${arr.length} pytań.`);state.view='home';render()}catch(e){alert('Błąd importu: '+e.message)}ev.target.value='';}
 function validateQuestions(arr){if(!Array.isArray(arr))throw new Error('JSON musi zawierać tablicę pytań.');for(const q of arr){if(!q.id||!q.question||!q.answers||!q.correct)throw new Error('Brakuje wymaganych pól.');for(const k of ['A','B','C','D'])if(!(k in q.answers))throw new Error('Każde pytanie musi mieć odpowiedzi A-D.');if(!['A','B','C','D'].includes(q.correct))throw new Error('correct musi być A/B/C/D.');q.edition=q.edition||'Nieznana';q.year=q.year||yearFromEdition(q.edition);q.stage=q.stage||'nieznany';q.category=q.category||'Inne';q.comment=q.comment||'';if(q.difficulty)q.difficulty=normalizedDifficulty(q)||q.difficulty;}}
 function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
