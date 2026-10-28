@@ -1,6 +1,6 @@
-const CACHE='op-trainer-v1-9-6';
+const CACHE='op-trainer-v1-10-1';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./key-resolver.mjs','./manifest.json','./demo-data.json','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
-self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
+self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{await c.addAll(ASSETS);try{await c.add('./op-data.json')}catch(_){/* Public iPhone shell deliberately excludes the private question bank. */}}))});
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))])));
 self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;

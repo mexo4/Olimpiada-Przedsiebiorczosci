@@ -23,6 +23,16 @@ const allQuestions=()=>state.questions;
 const isOfficialQuestion=q=>String(q?.id||'').startsWith('op-');
 const officialQuestions=()=>state.questions.filter(isOfficialQuestion);
 const primaryQuestions=()=>officialQuestions().length?officialQuestions():state.questions;
+// Theoretical mode is evaluated from the question statement only, never the archival
+// metadata, reference year, comment or the year in which the test took place.
+function isTheoryQuestion(q){
+ if(typeof q.theoryEligible==='boolean')return q.theoryEligible;
+ if(new Set(['op-20-43','op-22-40','op-23-8','op-4-48','op-7-16','op-XV-szkolny-40','op-XV-szkolny-41','op-XV-szkolny-5','op-7-38']).has(q.id))return false;
+ const t=topicNorm(q.question||'');
+ return !(/(?:18|19|20)\d{2}|ranking|najbogatsz|najdrozsz|najcenniejsz|obecnie|aktualnie|wedlug raportu|wg forbes|wedlug magazynu fortune|^w ktorym roku|^w jakim roku|^od kiedy/.test(t));
+}
+const theoryQuestions=()=>officialQuestions().filter(isTheoryQuestion);
+
 const STAGE_MODES={school:{label:'Szkolna',key:'school'},district:{label:'Okręgowa',key:'district'},central:{label:'Centralna',key:'central'}};
 function stageKey(v){const n=topicNorm(v);if(n.includes('szkol'))return'school';if(n.includes('okreg'))return'district';if(n.includes('central'))return'central';return'';}
 function yearFromEdition(v=''){let m=String(v).match(/\b(20\d{2})\s*[\/-]\s*(20\d{2})\b/);if(m)return `${m[1]}/${m[2]}`;m=String(v).match(/\b(\d{2})\s*[\/-]\s*(\d{2})\b/);if(m)return `${2000+Number(m[1])}/${2000+Number(m[2])}`;return'';}
@@ -107,7 +117,7 @@ async function tryLoadOfficialData(force=false,onProgress=null){
       if(kr.ok){const ki=await kr.json();keyIndex=Array.isArray(ki)?ki:(ki&&typeof ki==='object'?[ki]:[]);}
     }catch(e){console.warn('Nie udało się wczytać archive-index/key-index',e)}
     state.keyPdfCount=keyIndex.length;
-    if(!raw.length&&!keyIndex.length){state.officialLoadError='Nie znaleziono ani op-raw.json, ani archiwalnych arkuszy OP.';return 0;}
+    if(!raw.length&&!keyIndex.length){if(!officialQuestions().length)state.officialLoadError='Nie znaleziono ani op-raw.json, ani archiwalnych arkuszy OP.';return 0;}
     if(onProgress)onProgress({done:0,total:keyIndex.length,label:`Wczytano ${raw.length} pytań interaktywnych i ${keyIndex.length} materiałów archiwalnych. Scalanie pełnej bazy...`});
     const fingerprint=`v193|${raw.length}|${keyIndex.length}`;
     const prev=await getMeta('officialFingerprint','');
@@ -131,7 +141,7 @@ async function tryLoadOfficialData(force=false,onProgress=null){
 async function init(){
   db=await openDB();state.questions=await getAll(STORE_Q);state.history=await getAll(STORE_H);state.favorites=new Set(await getMeta('favorites',[]));state.importStats=await getMeta('officialImportStats',null);
   let bundled=0;
-  if(!officialQuestions().length)bundled=await tryLoadBundledQuestions();
+  if((await getMeta('bundledDataVersion',''))!=='2026-10-27-v1-10-1') {bundled=await tryLoadBundledQuestions();if(bundled)await setMeta('bundledDataVersion','2026-10-27-v1-10-1');}
   if(!state.questions.length){const demo=await fetch('demo-data.json').then(r=>r.json());for(const q of demo)await put(STORE_Q,q);state.questions=demo;}
   refreshXXIIQuestions();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(()=>{});
@@ -162,7 +172,7 @@ async function syncOfficialDataInBackground(force=false){
 }
 
 function nav(active){return `<nav class="nav"><button data-nav="home" class="${active==='home'?'active':''}">Start</button><button data-nav="learn" class="${active==='learn'?'active':''}">Nauka</button><button data-nav="xxii" class="${active==='xxii'?'active':''}">XXII</button><button data-nav="stats" class="${active==='stats'?'active':''}">Statystyki</button><button data-nav="settings" class="${active==='settings'?'active':''}">Dane</button></nav>`}
-function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.9.6</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
+function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.10.1</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
 function render(){
   document.body.classList.toggle('quiz-active',state.view==='session');
   if(state.view==='home')renderHome();else if(state.view==='learn')renderLearnSetup();else if(state.view==='xxii')renderXXII();else if(state.view==='stats')renderStats();else if(state.view==='settings')renderSettings();else if(state.view==='stage')renderStageMode();else if(state.view==='session')renderSession();else if(state.view==='summary')renderSummary();
@@ -171,7 +181,7 @@ function render(){
 
 function iosInstallNotice(){return isIOS()&&!isStandalone()?`<div class="notice ios-notice"><strong>iPhone/iPad:</strong> ta wersja jest już PWA. Po opublikowaniu jej przez HTTPS w Safari wybierz <strong>Udostępnij → Dodaj do ekranu początkowego</strong>. Otworzy się później jak osobna aplikacja.</div>`:'';}
 function renderHome(){const due=countDue(),wrongIds=getWrongIds();$('#app').innerHTML=shell(`<div class="stack">
-<div class="notice">Po uruchomieniu POBIERZ-PYTANIA-WINDOWS.bat aplikacja pobiera pytania i komentarze z bazy OP oraz dopasowuje prawidłowe odpowiedzi z oficjalnych arkuszy PDF z kluczem.</div>
+<div class="notice">Zawiera ${officialQuestions().length} archiwalnych pytań OP. We wszystkich treningach wynik punktowy pojawia się dopiero po zakończeniu sesji. Komentarze własne i archiwalne są oznaczone osobno.</div>
 ${!officialQuestions().length?(state.rawOfficialCount?`<div class="notice"><strong>Baza znaleziona:</strong> wykryto ${state.rawOfficialCount} pytań interaktywnych i ${state.keyPdfCount} materiałów archiwalnych. Trwa dopasowywanie oficjalnych kluczy; po zakończeniu pojawią się pytania gotowe do rozwiązywania.</div>`:`<div class="notice"><strong>Tryb demo:</strong> nie ma jeszcze załadowanych oficjalnych pytań OP. Pełna symulacja będzie dostępna po przeniesieniu/pobraniu bazy i zakończeniu analizy kluczy.</div>`):''}
 ${iosInstallNotice()}
 <div class="stats-grid"><div class="card"><div class="kpi">${state.history.length}</div><div class="kpi-label">odpowiedzi</div></div><div class="card"><div class="kpi">${overallAccuracy()}%</div><div class="kpi-label">skuteczność</div></div><div class="card"><div class="kpi">${due}</div><div class="kpi-label">do powtórki</div></div></div>
@@ -182,7 +192,8 @@ ${tile('Losowy trening','Filtry: etap, edycja i kategoria.','learn')}
 ${tile('Tryb szkolny','Tylko archiwalne pytania z eliminacji szkolnych.','stage:school')}
 ${tile('Tryb okręgowy','Tylko archiwalne pytania z eliminacji okręgowych.','stage:district')}
 ${tile('Tryb centralny','Tylko archiwalne pytania z eliminacji centralnych.','stage:central')}
-${tile('Tryb 20 pytań','20 pytań: 10 łatwych + 10 trudnych. Poprawność i wyjaśnienie od razu, punkty dopiero na końcu. Maks. 30 pkt.','half')}
+${tile('Tryb 20 pytań','20 pytań: 10 łatwych + 10 trudnych. Wyjaśnienia po zatwierdzeniu, punkty na końcu. Maks. 30 pkt.','half')}
+${tile('20 pytań — czysta teoria',`${theoryQuestions().length} pytań bez datowanych statystyk, rankingów i zmiennych rekordów. 10 łatwych + 10 trudnych.`,'theory-half')}
 ${tile('Pełna symulacja OP','50 pytań: 25 łatwiejszych + 25 trudniejszych. Maks. 75 pkt. Wynik ukryty do końca.','official')}
 ${tile('Powtórz błędy',`${wrongIds.size} pytań wymagających poprawy.`,'mistakes')}
 ${tile('Powtórki dziś',`${due} pytań zaplanowanych.`,'due')}
@@ -199,7 +210,7 @@ function startFiltered(exam){const pool=shuffle(filterQuestions()),n=Math.min(pa
 function quickAction(a){
  if(a.startsWith('stage:')){state.stageMode=a.slice(6);state.view='stage';render();return}
  if(a==='learn'){state.view='learn';render();return} if(a==='xxii'){state.view='xxii';render();return} if(a==='adaptive'){startAdaptive(20);return}
- if(a==='half'){startOfficialMode(10,10,'half');return} if(a==='official'){startOfficialMode(25,25,'official');return}
+ if(a==='half'){startOfficialMode(10,10,'half');return} if(a==='theory-half'){startOfficialMode(10,10,'theory-half',theoryQuestions());return} if(a==='official'){startOfficialMode(25,25,'official');return}
  if(a==='mistakes'){const ids=getWrongIds();startSession(shuffle(allQuestions().filter(q=>ids.has(q.id))),'mistakes',false);return}
  if(a==='due'){const now=Date.now();startSession(shuffle(allQuestions().filter(q=>getSR(q.id).due<=now)),'due',false);return}
  if(a==='favorites'){startSession(shuffle(allQuestions().filter(q=>state.favorites.has(q.id))),'favorites',false);return}
@@ -219,7 +230,7 @@ function renderStageMode(){
  <div class="card stack"><div class="filters">${selectField('Edycja','stage-edition',['Wszystkie',...editions])}</div>
  <div class="grid">
  ${tile('Trening 20','20 losowych pytań z wybranego etapu. Odpowiedź i komentarz po każdym pytaniu.','stage-train')}
- ${tile('Połowa 20','10 pytań za 1 pkt + 10 za 2 pkt. Bieżący wynik widoczny.','stage-half')}
+ ${tile('Połowa 20','10 pytań za 1 pkt + 10 za 2 pkt. Wynik dopiero po zakończeniu.','stage-half')}
  ${tile('Pełny test 50','25 pytań za 1 pkt + 25 za 2 pkt. Wynik ukryty do końca.','stage-full')}
  ${tile('Wszystkie pytania','Przejdź cały dostępny bank dla wybranego etapu i edycji.','stage-all')}
  </div></div></div>`,'home');
@@ -283,9 +294,9 @@ function xxiiAction(a){
 
 function normalizedDifficulty(q){const d=String(q.difficulty||'').toLowerCase();if(['easy','łatwe','latwe','łatwiejsze','latwiejsze','1'].includes(d))return'easy';if(['hard','trudne','trudniejsze','2'].includes(d))return'hard';if(Number(q.points)===1)return'easy';if(Number(q.points)===2)return'hard';return null;}
 function splitByDifficulty(pool){return {easy:pool.filter(q=>normalizedDifficulty(q)==='easy'),hard:pool.filter(q=>normalizedDifficulty(q)==='hard')};}
-function startOfficialMode(easyN,hardN,mode){
+function startOfficialMode(easyN,hardN,mode,pool=null){
  if(state.officialLoading){alert('Oficjalna baza OP jest jeszcze analizowana. Poczekaj, aż zniknie pasek „Analiza oficjalnych kluczy OP”, i uruchom tryb ponownie.');return}
- const official=officialQuestions();
+ const official=pool||officialQuestions();
  const parts=splitByDifficulty(official);
  if(parts.easy.length<easyN||parts.hard.length<hardN){
    if(!official.length){alert('Aplikacja ma teraz tylko pytania demo. W folderze tej wersji nie ma załadowanej bazy OP. Uruchom PRZENIES-DANE-Z-POPRZEDNIEJ-WERSJI.bat albo POBIERZ-PYTANIA-WINDOWS.bat, a potem START-WINDOWS.bat.');return}
@@ -294,8 +305,8 @@ function startOfficialMode(easyN,hardN,mode){
  const list=[...shuffle(parts.easy).slice(0,easyN),...shuffle(parts.hard).slice(0,hardN)];
  // 20-question half-OP mode hides points until the end, but shows correctness and explanation immediately after each answer.
  // The full score breakdown is shown only after all questions are completed.
- const isHalf=mode==='half';
- startSession(shuffle(list),mode,isHalf,isHalf?30:60,true);
+ const isHalf=mode==='half'||mode==='theory-half';
+ startSession(shuffle(list),mode,!isHalf,isHalf?30:60,true);
 }
 
 function startExamSetup(){const base=primaryQuestions(),ed=uniq(base.map(q=>q.edition)).sort(),st=uniq(base.map(q=>q.stage)).sort();$('#app').innerHTML=shell(`<div class="card stack"><h2 style="margin:0">Własna symulacja</h2><div class="filters">${selectField('Edycja','x-edition',['Wszystkie',...ed])}${selectField('Etap','x-stage',['Wszystkie',...st])}<div class="field"><label>Liczba pytań</label><input id="x-count" type="number" min="1" max="200" value="50"></div></div><div class="field"><label>Czas (minuty)</label><input id="x-time" type="number" min="1" max="240" value="60"></div><button class="btn danger" id="x-start">Rozpocznij egzamin</button></div>`,'home');$('#x-start').onclick=()=>{const e=$('#x-edition').value,s=$('#x-stage').value;let p=primaryQuestions().filter(q=>(e==='Wszystkie'||q.edition===e)&&(s==='Wszystkie'||q.stage===s));const n=Math.min(parseInt($('#x-count').value||50),p.length),mins=parseInt($('#x-time').value||60);startSession(shuffle(p).slice(0,n),'exam',true,mins,false)}}
@@ -329,11 +340,7 @@ function scoreBreakdown(s){
  const hardPts=hard.reduce((t,q)=>t+officialPoints(q,scoredAnswer(s,q)),0);
  return {easy,hard,easyPts,hardPts,total:easyPts+hardPts,max:easy.length+hard.length*2,scoreable:easy.length+hard.length};
 }
-function liveScoreHtml(s){
- if(s.exam||s.mode==='official')return '';
- const b=scoreBreakdown(s);if(!b.scoreable)return '';
- return `<div class="live-score"><strong>${fmtPts(b.total)} pkt</strong><span>łatwe ${fmtPts(b.easyPts)} • trudne ${fmtPts(b.hardPts)}</span></div>`;
-}
+function liveScoreHtml(s){return '';} // Wynik punktowy widoczny tylko w podsumowaniu.
 
 function explanationHtml(s,q,chosen){
  const correctDisplay=displayKeyForOriginal(s,q,q.correct);
@@ -347,19 +354,20 @@ function renderSession(){
  const chosen=s.answers[q.id],exam=s.exam,reveal=!exam&&isConfirmed(s,q),diff=normalizedDifficulty(q);
  const nextLabel=(!exam&&!reveal)?(chosen?'Sprawdź odpowiedź':'Wybierz odpowiedź'):(s.index===s.questions.length-1?'Zakończ':'Dalej →');
  const overlay=(s.explanationFor===q.id)?explanationOverlayHtml(s,q,chosen):'';
- $('#app').innerHTML=shell(`<div class="stack quiz-wrap"><div class="card stack quiz-card"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span class="progress-pill">${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span class="meta-edition">${esc(q.edition)}</span><span>${esc(q.stage)}</span><span class="meta-category">${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question">${esc(q.question)}</div>${reveal?explanationHtml(s,q,chosen):''}<div class="stack answers-stack">${DISPLAY_KEYS.map(k=>answerButton(s,q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''} ${reveal&&chosen==='E'?'neutral':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div><div class="row session-actions"><button class="btn secondary fav-btn" id="fav">${state.favorites.has(q.id)?'★':'☆'} <span class="fav-label">${state.favorites.has(q.id)?'Ulubione':'Dodaj do ulubionych'}</span></button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next" ${!exam&&!chosen?'disabled':''}>${nextLabel}</button></div></div></div>${overlay}`,'learn');
+ $('#app').innerHTML=shell(`<div class="stack quiz-wrap"><div class="card stack quiz-card"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span class="progress-pill">${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span class="meta-edition">${esc(q.edition)}</span><span>${esc(q.stage)}</span><span class="meta-category">${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question">${esc(q.question)}</div><div class="stack answers-stack">${DISPLAY_KEYS.map(k=>answerButton(s,q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''} ${reveal&&chosen==='E'?'neutral':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div><div class="row session-actions"><button class="btn secondary" id="quit">Menu</button><button class="btn secondary fav-btn" id="fav">${state.favorites.has(q.id)?'★':'☆'} <span class="fav-label">${state.favorites.has(q.id)?'Ulubione':'Dodaj do ulubionych'}</span></button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next" ${!exam&&!chosen?'disabled':''}>${nextLabel}</button></div></div></div>${overlay}`,'learn');
  document.querySelectorAll('.answer').forEach(b=>b.onclick=()=>chooseAnswer(q,b.dataset.k));
+ $('#quit').onclick=()=>{if(confirm('Zakończyć tę sesję bez podsumowania?')){stopExamTimer();state.session=null;state.view='home';render();}};
  $('#fav').onclick=()=>toggleFavorite(q.id);
- $('#prev').onclick=()=>{s.index--;render()};
+ $('#prev').onclick=()=>{s.explanationFor=null;s.index--;render()};
  $('#next').onclick=async()=>{
    const current=s.answers[q.id];
    if(!current){alert('Wybierz odpowiedź A-D albo E — nie udzielam odpowiedzi.');return}
    if(!exam&&!isConfirmed(s,q)){await confirmAnswer(q);return}
-   if(s.mode==='half'){s.explanationFor=q.id;render();return}
+   if(!exam){s.explanationFor=q.id;render();return}
    if(s.index===s.questions.length-1)await finishSession();else{s.index++;render()}
  };
  if(s.explanationFor===q.id){
-   $('#explanation-close').onclick=advanceAfterExplanation;
+   $('#explanation-close').onclick=()=>{s.explanationFor=null;render()};
    $('#explanation-next').onclick=advanceAfterExplanation;
  }
 }
@@ -371,7 +379,7 @@ function explanationOverlayHtml(s,q,chosen){
  const abstain=chosen==='E';
  const status=abstain?'Nie udzielono odpowiedzi':correct?'Poprawna odpowiedź':'Błędna odpowiedź';
  const tone=abstain?'neutral':correct?'success':'error';
- return `<div class="explanation-screen" role="dialog" aria-modal="true"><div class="explanation-panel"><button class="explanation-close" id="explanation-close" aria-label="Zamknij wyjaśnienie">×</button><div class="explanation-progress">Pytanie ${s.index+1} z ${s.questions.length}</div><div class="explanation-status ${tone}">${status}</div><h2>Wyjaśnienie odpowiedzi</h2><div class="explanation-answer"><span class="explanation-label">Twoja odpowiedź</span><strong>${esc(chosenDisplay)}</strong>${chosenDisplay!=='E'&&chosen?`<span>${esc(q.answers?.[chosen]||'')}</span>`:''}</div><div class="explanation-answer correct-answer"><span class="explanation-label">Prawidłowa odpowiedź</span><strong>${esc(correctDisplay)}</strong><span>${esc(correctText)}</span></div><div class="explanation-body"><div class="explanation-label">Dlaczego?</div><p>${esc(q.comment||'Brak komentarza do tego pytania w archiwum.')}</p></div><div class="explanation-note">Punkty w trybie 20 pytań pozostają ukryte do końca testu.</div><button class="btn explanation-next" id="explanation-next">${s.index===s.questions.length-1?'Zobacz wynik':'Następne pytanie →'}</button></div></div>`;
+ return `<div class="explanation-screen" role="dialog" aria-modal="true"><div class="explanation-panel"><button class="explanation-close" id="explanation-close" aria-label="Zamknij wyjaśnienie">×</button><div class="explanation-progress">Pytanie ${s.index+1} z ${s.questions.length}</div><div class="explanation-status ${tone}">${status}</div><h2>Wyjaśnienie odpowiedzi</h2><div class="explanation-answer"><span class="explanation-label">Twoja odpowiedź</span><strong>${esc(chosenDisplay)}</strong>${chosenDisplay!=='E'&&chosen?`<span>${esc(q.answers?.[chosen]||'')}</span>`:''}</div><div class="explanation-answer correct-answer"><span class="explanation-label">Prawidłowa odpowiedź</span><strong>${esc(correctDisplay)}</strong><span>${esc(correctText)}</span></div><div class="explanation-body"><div class="explanation-label">${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?'Wyjaśnienie autorskie':q.commentOrigin==='archiwalny_duplikat'?'Komentarz z równoważnego pytania OP':q.comment?.trim()?'Komentarz z bazy OP':'Brak oficjalnego komentarza'}</div><p>${esc(q.comment?.trim()||'W dostępnej bazie źródłowej nie ma uzasadnienia. Sprawdź poniżej poprawną odpowiedź i w razie potrzeby otwórz materiał źródłowy. Nie dopisujemy niesprawdzonych wyjaśnień.')}</p>${q.source&&/^https?:/.test(q.source)?`<a class="source-link expl-link" href="${esc(q.source)}" target="_blank" rel="noopener">Otwórz arkusz źródłowy OP</a>`:''}</div><div class="explanation-note">Punkty zobaczysz dopiero po zakończeniu sesji.</div><button class="btn explanation-next" id="explanation-next">${s.index===s.questions.length-1?'Zobacz wynik':'Następne pytanie →'}</button></div></div>`;
 }
 function advanceAfterExplanation(){
  const s=state.session;if(!s)return;
@@ -390,11 +398,7 @@ async function chooseAnswer(q,displayKey){
  const s=state.session;if(isConfirmed(s,q))return;
  const original=originalKeyForDisplay(s,q,displayKey);
  s.answers[q.id]=original;
- if(s.exam){
-   // In the 20-question half-OP mode, reveal correctness/explanation immediately, but keep points hidden.
-   if(s.mode==='half' && !s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,original,s.mode)}
-   render();return
- }
+ if(s.exam){render();return}
  // E means intentionally no answer: immediately show the explanation, but keep score at 0.
  if(original==='E'){await confirmAnswer(q);return}
  // A-D are only selected here. Score and feedback appear after explicit confirmation.
@@ -404,6 +408,7 @@ async function confirmAnswer(q){
  const s=state.session,k=s.answers[q.id];if(!k||s.exam||isConfirmed(s,q))return;
  s.confirmed[q.id]=true;
  if(!s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,k,s.mode)}
+ s.explanationFor=q.id;
  render();
 }
 
@@ -418,7 +423,7 @@ function renderSummary(){
  const s=state.session,answered=s.questions.filter(q=>s.answers[q.id]&&s.answers[q.id]!=='E'),correct=answered.filter(q=>s.answers[q.id]===q.correct).length,b=scoreBreakdown(s);let scoreBlock='';
  if(b.scoreable){const main=s.officialScoring?`<div class="result">${fmtPts(b.total)} / ${b.max} pkt</div><h2>${pct(Math.max(0,b.total),b.max)}% maksymalnej punktacji</h2>`:`<div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}% poprawnych</h2>`;scoreBlock=`<div class="card official-score">${main}<div class="score-split"><span>Łatwiejsze: <strong>${fmtPts(b.easyPts)} / ${b.easy.length}</strong></span><span>Trudniejsze: <strong>${fmtPts(b.hardPts)} / ${b.hard.length*2}</strong></span><span>Łącznie: <strong>${fmtPts(b.total)} / ${b.max} pkt</strong></span></div><p class="sub">Poprawna: +1/+2 • błędna: −0,5/−1 • E / brak odpowiedzi: 0 pkt</p></div>`;
  }else scoreBlock=`<div class="card"><div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}%</h2><p class="sub">Odpowiedziano: ${answered.length}/${s.questions.length}</p></div>`;
- $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';const shownA=a?displayKeyForOriginal(s,q,a):'—',shownCorrect=displayKeyForOriginal(s,q,q.correct);return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div></div><div style="text-align:right"><strong>${shownA} / ${shownCorrect}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};
+ $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';const shownA=a?displayKeyForOriginal(s,q,a):'—',shownCorrect=displayKeyForOriginal(s,q,q.correct);return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div><details class="summary-explanation"><summary>Odpowiedź i wyjaśnienie</summary><div><strong>${shownCorrect} — ${esc(q.answers[q.correct]||'')}</strong><p>${esc(q.comment||'W tej bazie nie ma zweryfikowanego komentarza. Odpowiedź została wskazana na podstawie klucza.')} ${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?' (Opracowanie autorskie, nie komentarz OP.)':''}</p>${q.source&&/^https?:/.test(q.source)?`<a href="${esc(q.source)}" target="_blank" rel="noopener">Arkusz źródłowy</a>`:''}</div></details></div><div style="text-align:right"><strong>${shownA} / ${shownCorrect}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};
 }
 function fmtPts(n){return Number.isInteger(n)?String(n):n.toFixed(1).replace('.',',')}
 
@@ -432,7 +437,7 @@ function updateSR(id,correct){const all=JSON.parse(localStorage.getItem('op-sr')
 function countDue(){const now=Date.now();return allQuestions().filter(q=>getSR(q.id).due<=now).length}
 async function toggleFavorite(id){if(state.favorites.has(id))state.favorites.delete(id);else state.favorites.add(id);await setMeta('favorites',[...state.favorites]);render()}
 
-function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.9.6 zachowuje naprawiony import PDF z v1.9.2, tasowanie odpowiedzi oraz poprawiony tryb mobilny. Import PDF nadal waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
+function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.10.1 zachowuje naprawiony import PDF z v1.9.2, tasowanie odpowiedzi oraz poprawiony tryb mobilny. Import PDF nadal waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
 async function importQuestionsFile(ev){const f=ev.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text()),arr=Array.isArray(data)?data:data.questions;validateQuestions(arr);for(const q of arr)await put(STORE_Q,q);state.questions=await getAll(STORE_Q);refreshXXIIQuestions();alert(`Zaimportowano ${arr.length} pytań.`);state.view='home';render()}catch(e){alert('Błąd importu: '+e.message)}ev.target.value='';}
 function validateQuestions(arr){if(!Array.isArray(arr))throw new Error('JSON musi zawierać tablicę pytań.');for(const q of arr){if(!q.id||!q.question||!q.answers||!q.correct)throw new Error('Brakuje wymaganych pól.');for(const k of ['A','B','C','D'])if(!(k in q.answers))throw new Error('Każde pytanie musi mieć odpowiedzi A-D.');if(!['A','B','C','D'].includes(q.correct))throw new Error('correct musi być A/B/C/D.');q.edition=q.edition||'Nieznana';q.year=q.year||yearFromEdition(q.edition);q.stage=q.stage||'nieznany';q.category=q.category||'Inne';q.comment=q.comment||'';if(q.difficulty)q.difficulty=normalizedDifficulty(q)||q.difficulty;}}
 function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
