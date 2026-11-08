@@ -172,7 +172,7 @@ async function syncOfficialDataInBackground(force=false){
 }
 
 function nav(active){return `<nav class="nav"><button data-nav="home" class="${active==='home'?'active':''}">Start</button><button data-nav="learn" class="${active==='learn'?'active':''}">Nauka</button><button data-nav="xxii" class="${active==='xxii'?'active':''}">XXII</button><button data-nav="stats" class="${active==='stats'?'active':''}">Statystyki</button><button data-nav="settings" class="${active==='settings'?'active':''}">Dane</button></nav>`}
-function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.10.1</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
+function shell(content,active=state.view){const ready=officialQuestions().length;const raw=state.rawOfficialCount||ready;const load=state.officialLoading?`<div class="syncbar"><div class="syncrow"><strong>Analiza oficjalnych kluczy OP</strong><span>${state.officialProgress?.done||0}/${state.officialProgress?.total??state.keyPdfCount??'?'} materiałów</span></div><div class="bar"><span style="width:${state.officialProgress?.total?Math.round((state.officialProgress.done/state.officialProgress.total)*100):4}%"></span></div><div class="sub">${esc(state.officialProgress?.label||'Przetwarzanie w tle...')} — gotowe pytania pojawią się po dopasowaniu kluczy.</div></div>`:'';const err=state.officialLoadError?`<div class="notice"><strong>Błąd bazy OP:</strong> ${esc(state.officialLoadError)}</div>`:'';return `<div class="shell"><div class="topbar"><div><div class="brand">OP Trainer <span class="version">v1.10.2</span></div><div class="sub">prywatna PWA • offline • bez AI</div></div><span class="badge">${ready} gotowych / ${raw} surowych • ${state.xxiiQuestions.length} pod XXII</span></div>${load}${err}${content}</div>${nav(active)}`}
 function render(){
   document.body.classList.toggle('quiz-active',state.view==='session');
   if(state.view==='home')renderHome();else if(state.view==='learn')renderLearnSetup();else if(state.view==='xxii')renderXXII();else if(state.view==='stats')renderStats();else if(state.view==='settings')renderSettings();else if(state.view==='stage')renderStageMode();else if(state.view==='session')renderSession();else if(state.view==='summary')renderSummary();
@@ -325,7 +325,7 @@ function isConfirmed(s,q){return !!s.confirmed?.[q.id];}
 function startSession(list,mode,exam=false,minutes=60,officialScoring=false){
  if(!list.length){alert('Brak pytań dla tego trybu.');return}
  stopExamTimer();
- state.session={mode,questions:list,index:0,answers:{},confirmed:{},recorded:{},answerOrders:buildAnswerOrders(list),started:Date.now(),exam,endAt:exam?Date.now()+minutes*60000:null,officialScoring};
+ state.session={mode,questions:list,index:0,answers:{},confirmed:{},explanationSeen:{},reviewedChoices:{},revisedAfterCheck:{},recorded:{},finishing:false,answerOrders:buildAnswerOrders(list),started:Date.now(),exam,endAt:exam?Date.now()+minutes*60000:null,officialScoring};
  state.view='session';if(exam)startExamTimer();render();
 }
 function startExamTimer(){stopExamTimer();state.examTimer=setInterval(()=>{if(!state.session)return;const left=state.session.endAt-Date.now();if(left<=0){finishSession();return}const el=$('#timer');if(el)el.textContent=formatTime(left)},1000)}
@@ -354,20 +354,27 @@ function renderSession(){
  const chosen=s.answers[q.id],exam=s.exam,reveal=!exam&&isConfirmed(s,q),diff=normalizedDifficulty(q);
  const nextLabel=(!exam&&!reveal)?(chosen?'Sprawdź odpowiedź':'Wybierz odpowiedź'):(s.index===s.questions.length-1?'Zakończ':'Dalej →');
  const overlay=(s.explanationFor===q.id)?explanationOverlayHtml(s,q,chosen):'';
- $('#app').innerHTML=shell(`<div class="stack quiz-wrap"><div class="card stack quiz-card"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span class="progress-pill">${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span class="meta-edition">${esc(q.edition)}</span><span>${esc(q.stage)}</span><span class="meta-category">${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question">${esc(q.question)}</div><div class="stack answers-stack">${DISPLAY_KEYS.map(k=>answerButton(s,q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''} ${reveal&&chosen==='E'?'neutral':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div><div class="row session-actions"><button class="btn secondary" id="quit">Menu</button><button class="btn secondary fav-btn" id="fav">${state.favorites.has(q.id)?'★':'☆'} <span class="fav-label">${state.favorites.has(q.id)?'Ulubione':'Dodaj do ulubionych'}</span></button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn" id="next" ${!exam&&!chosen?'disabled':''}>${nextLabel}</button></div></div></div>${overlay}`,'learn');
+ $('#app').innerHTML=shell(`<div class="stack quiz-wrap"><div class="card stack quiz-card"><div class="row session-head" style="justify-content:space-between"><div class="meta"><span class="progress-pill">${s.index+1}/${s.questions.length}</span>${questionYear(q)?`<span class="year-badge">${esc(questionYear(q))}</span>`:''}<span class="meta-edition">${esc(q.edition)}</span><span>${esc(q.stage)}</span><span class="meta-category">${esc(q.category)}</span>${diff?`<span class="difficulty ${diff}">${diff==='easy'?'1 pkt':'2 pkt'}</span>`:''}</div><div class="session-status">${liveScoreHtml(s)}${exam?`<div class="timer" id="timer">${formatTime(s.endAt-Date.now())}</div>`:''}</div></div><div class="question-nav"><button class="btn secondary" id="prev-top" ${s.index===0?'disabled':''}>← Poprzednie pytanie</button>${reveal?'<button class="btn secondary" id="edit-top">Zmień odpowiedź</button>':''}</div><div class="question">${esc(q.question)}</div><div class="stack answers-stack">${DISPLAY_KEYS.map(k=>answerButton(s,q,k,chosen,reveal)).join('')}<button class="answer abstain ${chosen==='E'?'selected':''} ${reveal&&chosen==='E'?'neutral':''}" data-k="E"><strong>E</strong><span>Nie udzielam odpowiedzi <small>— 0 pkt</small></span></button></div><div class="row session-actions"><button class="btn secondary" id="quit">Menu</button><button class="btn secondary fav-btn" id="fav">${state.favorites.has(q.id)?'★':'☆'} <span class="fav-label">${state.favorites.has(q.id)?'Ulubione':'Dodaj do ulubionych'}</span></button><button class="btn secondary" id="prev" ${s.index===0?'disabled':''}>← Wstecz</button>${reveal?'<button class="btn secondary" id="edit-answer">Zmień odpowiedź</button>':''}<button class="btn" id="next" ${!exam&&!chosen?'disabled':''}>${nextLabel}</button></div></div></div>${overlay}`,'learn');
  document.querySelectorAll('.answer').forEach(b=>b.onclick=()=>chooseAnswer(q,b.dataset.k));
  $('#quit').onclick=()=>{if(confirm('Zakończyć tę sesję bez podsumowania?')){stopExamTimer();state.session=null;state.view='home';render();}};
  $('#fav').onclick=()=>toggleFavorite(q.id);
- $('#prev').onclick=()=>{s.explanationFor=null;s.index--;render()};
+ $('#prev').onclick=goToPreviousQuestion;
+ $('#prev-top').onclick=goToPreviousQuestion;
+ if(reveal){$('#edit-answer').onclick=editCurrentAnswer;$('#edit-top').onclick=editCurrentAnswer;}
  $('#next').onclick=async()=>{
    const current=s.answers[q.id];
    if(!current){alert('Wybierz odpowiedź A-D albo E — nie udzielam odpowiedzi.');return}
    if(!exam&&!isConfirmed(s,q)){await confirmAnswer(q);return}
-   if(!exam){s.explanationFor=q.id;render();return}
-   if(s.index===s.questions.length-1)await finishSession();else{s.index++;render()}
+   if(!exam){
+     if(s.explanationSeen[q.id]){await advanceToNextQuestion();return}
+     s.explanationFor=q.id;render();return
+   }
+   await advanceToNextQuestion()
  };
  if(s.explanationFor===q.id){
-   $('#explanation-close').onclick=()=>{s.explanationFor=null;render()};
+   $('#explanation-close').onclick=()=>{s.explanationFor=null;s.explanationSeen[q.id]=true;render()};
+   $('#explanation-back').onclick=goToPreviousQuestion;
+   $('#explanation-edit').onclick=editCurrentAnswer;
    $('#explanation-next').onclick=advanceAfterExplanation;
  }
 }
@@ -379,13 +386,32 @@ function explanationOverlayHtml(s,q,chosen){
  const abstain=chosen==='E';
  const status=abstain?'Nie udzielono odpowiedzi':correct?'Poprawna odpowiedź':'Błędna odpowiedź';
  const tone=abstain?'neutral':correct?'success':'error';
- return `<div class="explanation-screen" role="dialog" aria-modal="true"><div class="explanation-panel"><button class="explanation-close" id="explanation-close" aria-label="Zamknij wyjaśnienie">×</button><div class="explanation-progress">Pytanie ${s.index+1} z ${s.questions.length}</div><div class="explanation-status ${tone}">${status}</div><h2>Wyjaśnienie odpowiedzi</h2><div class="explanation-answer"><span class="explanation-label">Twoja odpowiedź</span><strong>${esc(chosenDisplay)}</strong>${chosenDisplay!=='E'&&chosen?`<span>${esc(q.answers?.[chosen]||'')}</span>`:''}</div><div class="explanation-answer correct-answer"><span class="explanation-label">Prawidłowa odpowiedź</span><strong>${esc(correctDisplay)}</strong><span>${esc(correctText)}</span></div><div class="explanation-body"><div class="explanation-label">${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?'Wyjaśnienie autorskie':q.commentOrigin==='archiwalny_duplikat'?'Komentarz z równoważnego pytania OP':q.comment?.trim()?'Komentarz z bazy OP':'Brak oficjalnego komentarza'}</div><p>${esc(q.comment?.trim()||'W dostępnej bazie źródłowej nie ma uzasadnienia. Sprawdź poniżej poprawną odpowiedź i w razie potrzeby otwórz materiał źródłowy. Nie dopisujemy niesprawdzonych wyjaśnień.')}</p>${q.source&&/^https?:/.test(q.source)?`<a class="source-link expl-link" href="${esc(q.source)}" target="_blank" rel="noopener">Otwórz arkusz źródłowy OP</a>`:''}</div><div class="explanation-note">Punkty zobaczysz dopiero po zakończeniu sesji.</div><button class="btn explanation-next" id="explanation-next">${s.index===s.questions.length-1?'Zobacz wynik':'Następne pytanie →'}</button></div></div>`;
+ return `<div class="explanation-screen" role="dialog" aria-modal="true"><div class="explanation-panel"><button class="explanation-close" id="explanation-close" aria-label="Zamknij wyjaśnienie">×</button><div class="explanation-progress">Pytanie ${s.index+1} z ${s.questions.length}</div><div class="explanation-controls"><button class="btn secondary" id="explanation-back" ${s.index===0?'disabled':''}>← Wstecz</button><button class="btn secondary" id="explanation-edit">Zmień odpowiedź</button></div><div class="explanation-status ${tone}">${status}</div><h2>Wyjaśnienie odpowiedzi</h2><div class="explanation-answer"><span class="explanation-label">Twoja odpowiedź</span><strong>${esc(chosenDisplay)}</strong>${chosenDisplay!=='E'&&chosen?`<span>${esc(q.answers?.[chosen]||'')}</span>`:''}</div><div class="explanation-answer correct-answer"><span class="explanation-label">Prawidłowa odpowiedź</span><strong>${esc(correctDisplay)}</strong><span>${esc(correctText)}</span></div><div class="explanation-body"><div class="explanation-label">${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?'Wyjaśnienie autorskie':q.commentOrigin==='archiwalny_duplikat'?'Komentarz z równoważnego pytania OP':q.comment?.trim()?'Komentarz z bazy OP':'Brak oficjalnego komentarza'}</div><p>${esc(q.comment?.trim()||'W dostępnej bazie źródłowej nie ma uzasadnienia. Sprawdź poniżej poprawną odpowiedź i w razie potrzeby otwórz materiał źródłowy. Nie dopisujemy niesprawdzonych wyjaśnień.')}</p>${q.source&&/^https?:/.test(q.source)?`<a class="source-link expl-link" href="${esc(q.source)}" target="_blank" rel="noopener">Otwórz arkusz źródłowy OP</a>`:''}</div><div class="explanation-note">Punkty zobaczysz dopiero po zakończeniu sesji. Możesz wrócić i zmienić odpowiedź.</div><button class="btn explanation-next" id="explanation-next">${s.index===s.questions.length-1?'Zobacz wynik':'Następne pytanie →'}</button></div></div>`;
 }
-function advanceAfterExplanation(){
- const s=state.session;if(!s)return;
+function goToPreviousQuestion(){
+ const s=state.session;if(!s||s.finishing||s.index===0)return;
+ s.explanationFor=null;s.index--;render();
+}
+function editCurrentAnswer(){
+ const s=state.session;if(!s||s.finishing||s.exam)return;
+ const q=s.questions[s.index];
+ if(s.confirmed[q.id])s.reviewedChoices[q.id]=s.answers[q.id];
+ delete s.confirmed[q.id];
+ delete s.explanationSeen[q.id];
  s.explanationFor=null;
- if(s.index===s.questions.length-1){finishSession();return}
+ render();
+}
+async function advanceToNextQuestion(){
+ const s=state.session;if(!s||s.finishing)return;
+ s.explanationFor=null;
+ if(s.index===s.questions.length-1){await finishSession();return}
  s.index++;render();
+}
+async function advanceAfterExplanation(){
+ const s=state.session;if(!s||s.finishing)return;
+ const q=s.questions[s.index];
+ s.explanationSeen[q.id]=true;
+ await advanceToNextQuestion();
 }
 function answerButton(s,q,displayKey,chosen,reveal){
  const original=originalKeyForDisplay(s,q,displayKey);let cls='answer';
@@ -395,8 +421,16 @@ function answerButton(s,q,displayKey,chosen,reveal){
  return `<button class="${cls}" data-k="${displayKey}"><strong>${displayKey}</strong><span>${esc(displayedAnswerText(s,q,displayKey))}</span></button>`;
 }
 async function chooseAnswer(q,displayKey){
- const s=state.session;if(isConfirmed(s,q))return;
+ const s=state.session;if(!s||s.finishing)return;
  const original=originalKeyForDisplay(s,q,displayKey);
+ if(isConfirmed(s,q)||s.reviewedChoices[q.id]){
+   const oldChoice=s.confirmed[q.id]?s.answers[q.id]:s.reviewedChoices[q.id];
+   if(oldChoice!==original)s.revisedAfterCheck[q.id]=true;
+   s.reviewedChoices[q.id]=oldChoice;
+   delete s.confirmed[q.id];
+   delete s.explanationSeen[q.id];
+   s.explanationFor=null;
+ }
  s.answers[q.id]=original;
  if(s.exam){render();return}
  // E means intentionally no answer: immediately show the explanation, but keep score at 0.
@@ -407,23 +441,33 @@ async function chooseAnswer(q,displayKey){
 async function confirmAnswer(q){
  const s=state.session,k=s.answers[q.id];if(!k||s.exam||isConfirmed(s,q))return;
  s.confirmed[q.id]=true;
- if(!s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,k,s.mode)}
+ // Do not persist an answer before the session ends: it can still be changed
+ // after navigating back, and history must only contain the FINAL choice.
  s.explanationFor=q.id;
  render();
 }
 
 async function recordAnswer(q,k,mode){const correct=k===q.correct,rec={questionId:q.id,answer:k,correct,ts:Date.now(),category:q.category,edition:q.edition,year:questionYear(q),stage:q.stage,mode};await add(STORE_H,rec);state.history.push(rec);if(k!=='E')updateSR(q.id,correct);}
 async function finishSession(){
- stopExamTimer();const s=state.session;
- if(s.exam){for(const q of s.questions){const k=s.answers[q.id];if(k&&!s.recorded[q.id]){s.recorded[q.id]=true;await recordAnswer(q,k,s.mode)}}}
- s.finished=Date.now();state.view='summary';render();
+ const s=state.session;if(!s||s.finishing||s.finished)return;
+ s.finishing=true;stopExamTimer();
+ try {
+   for(const q of s.questions){
+     const k=s.answers[q.id];
+     if(k&&(s.exam||s.confirmed[q.id])&&!s.recorded[q.id]){
+       await recordAnswer(q,k,s.mode);
+       s.recorded[q.id]=true;
+     }
+   }
+   s.finished=Date.now();state.view='summary';render();
+ }catch(e){s.finishing=false;console.error('Błąd zapisu wyników',e);alert('Nie udało się zapisać wyników. Spróbuj zakończyć sesję ponownie.');}
 }
 function officialPoints(q,a){if(a==='E'||!a)return 0;const hard=normalizedDifficulty(q)==='hard';if(a===q.correct)return hard?2:1;return hard?-1:-0.5;}
 function renderSummary(){
  const s=state.session,answered=s.questions.filter(q=>s.answers[q.id]&&s.answers[q.id]!=='E'),correct=answered.filter(q=>s.answers[q.id]===q.correct).length,b=scoreBreakdown(s);let scoreBlock='';
  if(b.scoreable){const main=s.officialScoring?`<div class="result">${fmtPts(b.total)} / ${b.max} pkt</div><h2>${pct(Math.max(0,b.total),b.max)}% maksymalnej punktacji</h2>`:`<div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}% poprawnych</h2>`;scoreBlock=`<div class="card official-score">${main}<div class="score-split"><span>Łatwiejsze: <strong>${fmtPts(b.easyPts)} / ${b.easy.length}</strong></span><span>Trudniejsze: <strong>${fmtPts(b.hardPts)} / ${b.hard.length*2}</strong></span><span>Łącznie: <strong>${fmtPts(b.total)} / ${b.max} pkt</strong></span></div><p class="sub">Poprawna: +1/+2 • błędna: −0,5/−1 • E / brak odpowiedzi: 0 pkt</p></div>`;
  }else scoreBlock=`<div class="card"><div class="result">${correct}/${s.questions.length}</div><h2>${pct(correct,s.questions.length)}%</h2><p class="sub">Odpowiedziano: ${answered.length}/${s.questions.length}</p></div>`;
- $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';const shownA=a?displayKeyForOriginal(s,q,a):'—',shownCorrect=displayKeyForOriginal(s,q,q.correct);return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div><details class="summary-explanation"><summary>Odpowiedź i wyjaśnienie</summary><div><strong>${shownCorrect} — ${esc(q.answers[q.correct]||'')}</strong><p>${esc(q.comment||'W tej bazie nie ma zweryfikowanego komentarza. Odpowiedź została wskazana na podstawie klucza.')} ${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?' (Opracowanie autorskie, nie komentarz OP.)':''}</p>${q.source&&/^https?:/.test(q.source)?`<a href="${esc(q.source)}" target="_blank" rel="noopener">Arkusz źródłowy</a>`:''}</div></details></div><div style="text-align:right"><strong>${shownA} / ${shownCorrect}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};
+ $('#app').innerHTML=shell(`<div class="stack">${scoreBlock}${Object.keys(s.revisedAfterCheck||{}).length?`<div class="notice">W ${Object.keys(s.revisedAfterCheck).length} pytaniach umożliwiono zmianę odpowiedzi po wcześniejszym pokazaniu rozwiązania. Wynik jest liczony z ostatnio zatwierdzonego wyboru.</div>`:''}<div class="card stack"><h3 style="margin:0">Analiza</h3>${s.questions.map(q=>{const a=s.answers[q.id],ok=a===q.correct,pts=normalizedDifficulty(q)?` • ${fmtPts(officialPoints(q,a))} pkt`:'';const shownA=a?displayKeyForOriginal(s,q,a):'—',shownCorrect=displayKeyForOriginal(s,q,q.correct);return `<div class="list-item"><div><strong>${esc(q.category)}</strong><div class="sub source-meta">${esc(sourceMeta(q))}</div><div class="sub">${esc(q.question)}</div><details class="summary-explanation"><summary>Odpowiedź i wyjaśnienie</summary><div><strong>${shownCorrect} — ${esc(q.answers[q.correct]||'')}</strong><p>${esc(q.comment||'W tej bazie nie ma zweryfikowanego komentarza. Odpowiedź została wskazana na podstawie klucza.')} ${['opracowanie_wlasne','independent_explanation_not_official_comment'].includes(q.commentOrigin)?' (Opracowanie autorskie, nie komentarz OP.)':''}</p>${q.source&&/^https?:/.test(q.source)?`<a href="${esc(q.source)}" target="_blank" rel="noopener">Arkusz źródłowy</a>`:''}</div></details></div><div style="text-align:right"><strong>${shownA} / ${shownCorrect}</strong><div class="sub">${a==='E'||!a?'0 pkt':ok?'✓':'✗'}${pts}${s.revisedAfterCheck?.[q.id]?'<div class="sub">Zmieniano po sprawdzeniu</div>':''}</div></div></div>`}).join('')}</div><button class="btn" id="done">Wróć na start</button></div>`,'home');$('#done').onclick=()=>{state.session=null;state.view='home';render()};
 }
 function fmtPts(n){return Number.isInteger(n)?String(n):n.toFixed(1).replace('.',',')}
 
@@ -437,7 +481,7 @@ function updateSR(id,correct){const all=JSON.parse(localStorage.getItem('op-sr')
 function countDue(){const now=Date.now();return allQuestions().filter(q=>getSR(q.id).due<=now).length}
 async function toggleFavorite(id){if(state.favorites.has(id))state.favorites.delete(id);else state.favorites.add(id);await setMeta('favorites',[...state.favorites]);render()}
 
-function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.10.1 zachowuje naprawiony import PDF z v1.9.2, tasowanie odpowiedzi oraz poprawiony tryb mobilny. Import PDF nadal waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
+function renderSettings(){const off=officialQuestions(),parts=splitByDifficulty(off),official=off.length,stats=state.importStats;$('#app').innerHTML=shell(`<div class="stack"><div class="card stack"><h2 style="margin:0">Baza pytań</h2><div class="meta"><span>Oficjalne OP: ${official}</span><span>Archiwalne pod XXII: ${state.xxiiQuestions.length}</span><span>Łatwiejsze: ${parts.easy.length}</span><span>Trudniejsze: ${parts.hard.length}</span></div>${stats?`<div class="notice">Gotowe: <strong>${stats.ready}</strong> • z oficjalnych tabel PDF: <strong>${stats.fromPdf}</strong> • z pełnych arkuszy PDF/HTML: <strong>${stats.fromArchive||0}</strong> • hinty HTML: <strong>${stats.fromHint}</strong> • komentarz (wysoka pewność): <strong>${stats.fromComment||0}</strong> • bez pewnego klucza: <strong>${stats.missing}</strong>.<br><span class="sub">Diagnostyka: materiały indeksowane ${stats.indexEntries||0}, wpisy PDF ${stats.pdfEntries||0}, PDF.js ${stats.pdfJsLoaded?'OK':'BŁĄD'}, PDF odczytane ${stats.parsedPdfs||0}, błędy PDF ${stats.pdfErrors||0}, PDF-y z kluczem ${stats.keyPdfs||0}, zestawy kluczy ${stats.keySets||0}, wiersze klucza ${stats.lineRows||0}, tokeny klucza ${stats.tokenRows||0}.${stats.pdfJsError?`<br><strong>PDF.js:</strong> ${esc(stats.pdfJsError)}`:''}${stats.pdfErrorSamples?.length?`<br><strong>Pierwsze błędy PDF:</strong><br>${stats.pdfErrorSamples.map(x=>esc(x)).join('<br>')}`:''}</span></div>`:''}<p class="sub">v1.10.2 zachowuje naprawiony import PDF z v1.9.2, tasowanie odpowiedzi oraz poprawiony tryb mobilny. Import PDF nadal waliduje prawdziwy nagłówek PDF (%PDF-) i przekazuje PDF.js gotowe bajty zamiast adresu URL. HTML/redirect zapisany jako .pdf jest wykrywany i naprawiany przed analizą. Treść pytania może zostać uzupełniona z arkusza, ale odpowiedź jest dodawana tylko wtedy, gdy klucz da się rozpoznać jednoznacznie.</p><div class="row"><button class="btn blue" id="reload-op">Przelicz klucze ponownie</button><button class="btn secondary" id="import">Importuj własny JSON</button><button class="btn secondary" id="exportq">Eksportuj bazę</button><button class="btn secondary" id="exportp">Eksportuj postęp</button></div></div><div class="card stack"><h3 style="margin:0">Zarządzanie</h3><button class="btn secondary" id="demo">Przywróć 20 pytań demo</button><button class="btn danger" id="reset">Usuń postęp i statystyki</button></div><div class="notice">Bez Pythona i Node.js: uruchom <strong>POBIERZ-PYTANIA-WINDOWS.bat</strong>, potem <strong>START-WINDOWS.bat</strong>. Analiza arkuszy PDF odbywa się w tle. Zakładka XXII jest tworzona lokalnie z załadowanego archiwum OP i działa offline po zapisaniu bazy.</div></div>`,'settings');$('#reload-op').onclick=async()=>{syncOfficialDataInBackground(true)};$('#import').onclick=()=>$('#file-import').click();$('#exportq').onclick=exportQuestions;$('#exportp').onclick=exportProgress;$('#demo').onclick=restoreDemo;$('#reset').onclick=resetProgress;}
 async function importQuestionsFile(ev){const f=ev.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text()),arr=Array.isArray(data)?data:data.questions;validateQuestions(arr);for(const q of arr)await put(STORE_Q,q);state.questions=await getAll(STORE_Q);refreshXXIIQuestions();alert(`Zaimportowano ${arr.length} pytań.`);state.view='home';render()}catch(e){alert('Błąd importu: '+e.message)}ev.target.value='';}
 function validateQuestions(arr){if(!Array.isArray(arr))throw new Error('JSON musi zawierać tablicę pytań.');for(const q of arr){if(!q.id||!q.question||!q.answers||!q.correct)throw new Error('Brakuje wymaganych pól.');for(const k of ['A','B','C','D'])if(!(k in q.answers))throw new Error('Każde pytanie musi mieć odpowiedzi A-D.');if(!['A','B','C','D'].includes(q.correct))throw new Error('correct musi być A/B/C/D.');q.edition=q.edition||'Nieznana';q.year=q.year||yearFromEdition(q.edition);q.stage=q.stage||'nieznany';q.category=q.category||'Inne';q.comment=q.comment||'';if(q.difficulty)q.difficulty=normalizedDifficulty(q)||q.difficulty;}}
 function download(name,obj){const b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
